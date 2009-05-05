@@ -102,6 +102,13 @@
 #
 # add_field also adds to a variable that olds a pack format.  This is
 # how the records parsed and assembeled.
+
+require 'pathname'
+$:.unshift Pathname(__FILE__).dirname.join('flat_file')
+
+require 'field_def'
+require 'record'
+
 class FlatFile
 
   class FlatFileException < StandardError;     end
@@ -109,213 +116,7 @@ class FlatFile
   class LongRecordError   < FlatFileException; end
   class RecordLengthError < FlatFileException; end
 
-  # A field definition tracks information that's necessary for
-  # FlatFile to process a particular field.  This is typically
-  # added to a subclass of FlatFile like so:
-  #
-  #  class SomeFile < FlatFile
-  #    add_field :some_field_name, :width => 35
-  #  end
-  #
-  class FieldDef
-
-    attr_accessor \
-      :name,
-      :width,
-      :filters,
-      :formatters,
-      :file_klass,
-      :padding,
-      :map_in_proc,
-      :aggressive
-
-    # Create a new FeildDef, having name and width. klass is a reference to the FlatFile
-    # subclass that contains this field definition.  This reference is needed when calling
-    # filters if they are specified using a symbol.
-    #
-    # Options can be :padding (if present and a true value, field is marked as a pad field),
-    # :width, specify the field width, :formatter, specify a formatter, :filter, specify a
-    # filter.
-    def initialize(name=null,options={},klass={})
-      @name = name
-      @width = 10
-      @filters = Array.new
-      @formatters = Array.new
-      @file_klass = klass
-      @padding = options.delete(:padding)
-
-      add_filter(options[:filter]) if options.has_key?(:filter)
-      add_formatter(options[:formatter]) if options.has_key?(:formatter)
-      @map_in_proc = options[:map_in_proc]
-      @width = options[:width] if options.has_key?(:width)
-      @aggressive = options[:aggressive] || false
-    end
-
-    # Will return true if the field is a padding field.  Padding fields are ignored
-    # when doing various things.  For example, when you're  populating an ActiveRecord
-    # model with a record, padding fields are ignored.
-    def is_padding?
-      @padding
-    end
-
-    # Add a filter.  Filters are used for processing field data when a flat file is being
-    # processed.  For fomratting the data when writing a flat file, see add_formatter
-    def add_filter(filter=nil,&block) #:nodoc:
-      @filters.push(filter) unless filter.nil?
-      @filters.push(block) if block_given?
-    end
-
-    # Add a formatter.  Formatters are used for formatting a field
-    # for rendering a record, or writing it to a file in the desired format.
-    def add_formatter(formatter=nil,&block) #:nodoc:
-      @formatters.push(formatter) if formatter
-      @formatters.push(block) if block_given?
-    end
-
-    # Filters a value based on teh filters associated with a
-    # FieldDef.
-    def pass_through_filters(v) #:nodoc:
-      pass_through(@filters,v)
-    end
-
-    # Filters a value based on the filters associated with a
-    # FieldDef.
-    def pass_through_formatters(v) #:nodoc:
-      pass_through(@formatters,v)
-    end
-
-    #protected
-
-    def pass_through(what,value) #:nodoc:
-      #puts "PASS THROUGH #{what.inspect} => #{value}"
-      what.each do |filter|
-        value  = case
-                 when filter.is_a?(Symbol)
-                   #puts "filter is a symbol"
-                   @file_klass.send(filter,value)
-                 when filter_block?(filter)
-                   #puts "filter is a block"
-                   filter.call(value)
-                 when filter_class?(filter)
-                   #puts "filter is a class"
-                   filter.filter(value)
-                 else
-                   #puts "filter not valid, preserving"
-                   value
-                 end
-      end
-      value
-    end
-
-    # Test to see if filter is a filter block.  A filter block
-    # can be called (using call) and takes one parameter
-    def filter_block?(filter) #:nodoc:
-      filter.respond_to?('call') && ( filter.arity >= 1 || filter.arity <= -1 )
-    end
-
-    # Test to see if a class is a filter class.  A filter class responds
-    # to the filter signal (you can call filter on it).
-    def filter_class?(filter) #:nodoc:
-      filter.respond_to?('filter')
-    end
-  end
-
-  # A record abstracts on line or 'record' of a fixed width field.
-  # The methods available are the kes of the hash passed to the constructor.
-  # For example the call:
-  #
-  #  h = Hash['first_name','Andy','status','Supercool!']
-  #  r = Record.new(h)
-  #
-  # would respond to r.first_name, and r.status yielding
-  # 'Andy' and 'Supercool!' respectively.
-  #
-  class Record
-    attr_reader :fields
-    attr_reader :klass
-    attr_reader :line_number
-
-    # Create a new Record from a hash of fields
-    def initialize(klass,fields=Hash.new,line_number = -1,&block)
-      @fields = Hash.new()
-      @klass = klass
-      @line_number = line_number
-
-      klass_fields = klass.get_subclass_variable('fields')
-
-      klass_fields.each do |f|
-        @fields.store(f.name, "")
-      end
-
-      @fields.merge!(fields)
-
-      @fields.each_key do |k|
-        @fields.delete(k) unless klass.has_field?(k)
-      end
-
-      yield(block, self)if block_given?
-
-      self
-    end
-
-    def map_in(model)
-      @klass.non_pad_fields.each do |f|
-        next unless(model.respond_to? "#{f.name}=")
-        if f.map_in_proc
-          f.map_in_proc.call(model,self)
-        else
-          model.send("#{f.name}=", send(f.name)) if f.aggressive or model.send(f.name).nil? || model.send(f.name).empty?
-        end
-      end
-    end
-
-    # Catches method calls and returns field values or raises an Error.
-    def method_missing(method,params=nil)
-      if(method.to_s.match(/^(.*)=$/))
-        if(fields.has_key?($1.to_sym))
-          @fields.store($1.to_sym,params)
-        else
-          raise Exception.new("Unknown method: #{ method }")
-        end
-      else
-        if(fields.has_key? method)
-          @fields.fetch(method)
-        else
-          raise Exception.new("Unknown method: #{ method }")
-        end
-      end
-    end
-
-    # Returns a string representation of the record suitable for writing to a flat
-    # file on disk or other media.  The fields are parepared according to the file
-    # definition, and any formatters attached to the field definitions.
-    def to_s
-      klass.fields.map { |field_def|
-        field_name = field_def.name.to_s
-        v = @fields[ field_name.to_sym ]#.to_s
-
-        field_def.pass_through_formatters(
-                                          field_def.is_padding? ? "" : v
-                                          )
-      }.pack(klass.pack_format)
-    end
-
-    # Produces a multiline string, one field per line suitable for debugging purposes.
-    def debug_string
-      str = ""
-      klass.fields.each do |f|
-        if f.is_padding?
-          str << "#{f.name}: \n"
-        else
-          str << "#{f.name}: #{send(f.name.to_sym)}\n"
-        end
-      end
-
-      str
-    end
-  end
-
-  # A hash of data stored on behalf of subclasses.  One hash
+  # A hash of data stored on behalf of subclasses. One hash
   # key for each subclass.
   @@subclass_data = Hash.new(nil)
 
@@ -323,24 +124,24 @@ class FlatFile
   @@unique_id = 0
 
   def next_record(io,&block)
-    return nil if io.eof?
+    return if io.eof?
     required_line_length = self.class.get_subclass_variable 'width'
     line = io.readline
     line.chop!
-    return nil if line.length == 0
-    difference = required_line_length - line.length
-    raise RecordLengthError.new(
-                                "length is #{line.length} but should be #{required_line_length}"
-                                ) unless(difference == 0)
+    return if line.length.zero?
+
+    unless (required_line_length - line.length) == 0
+      raise RecordLengthError.new("length is #{line.length} but should be #{required_line_length}")
+    end
 
     if block_given?
-      yield(create_record(line, io.lineno), line)
+      yield create_record(line, io.lineno), line
     else
       create_record(line,io.lineno)
     end
   end
 
-  # Iterate through each record (each line of the data file).  The passed
+  # Iterate through each record (each line of the data file). The passed
   # block is passed a new Record representing the line.
   #
   #  s = SomeFile.new
@@ -381,12 +182,14 @@ class FlatFile
     fields      = self.class.get_subclass_variable 'fields'
 
     f = line.unpack(pack_format)
+    
     (0..(fields.size-1)).map do |index|
       unless fields[index].is_padding?
         h.store fields[index].name, fields[index].pass_through_filters(f[index])
       end
     end
-    Record.new(self.class, h, line_number)
+    
+    return Record.new(self.class, h, line_number)
   end
 
   # Add a field to the FlatFile subclass.  Options can include
@@ -406,25 +209,23 @@ class FlatFile
     width       = get_subclass_variable 'width'
     pack_format = get_subclass_variable 'pack_format'
 
+    fields << fd = FieldDef.new(name, options, self)
 
-    fd = FieldDef.new(name, options, self)
-    yield(fd) if block_given?
+    yield fd if block_given?
 
-    fields << fd
     width += fd.width
     pack_format << "A#{fd.width}"
     set_subclass_variable 'width', width
-    fd
+
+    return fd
   end
 
   # Add a pad field.  To have the name auto generated, use :auto_name for
   # the name parameter.  For options see add_field.
   def self.pad(name, options = {})
-    fd = self.add_field(
-                        name.eql?(:auto_name) ? self.new_pad_name : name,
-                        options
-                        )
-    fd.padding = true
+    name = self.new_pad_name if name == :auto_name
+    fd   = self.add_field(name, options.merge(:padding => true))
+    return fd
   end
 
   def self.new_pad_name #:nodoc:
@@ -441,16 +242,13 @@ class FlatFile
     record = Record.new(self)
 
     fields.map do |f|
-      assign_method = "#{f.name}="
       value = model.respond_to?(f.name.to_sym) ? model.send(f.name.to_sym) : ""
-      record.send(assign_method, value)
+      record.send("#{f.name}=", value)
     end
 
-    if block_given?
-      yield block, record
-    end
+    yield block, record if block_given?
 
-    record
+    return record
   end
 
   # Return a lsit of fields for the FlatFile subclass
@@ -459,7 +257,7 @@ class FlatFile
   end
 
   def self.non_pad_fields
-    self.fields.select { |f| not f.is_padding? }
+    self.fields.delete_if { |f| f.is_padding? }
   end
 
   def non_pad_fields
@@ -495,29 +293,37 @@ class FlatFile
 
   protected
 
+  #
   # Retrieve the subclass data hash for the current class
+  #
   def self.subclass_data #:nodoc:
-    unless(@@subclass_data.has_key?(self))
+    unless @@subclass_data.has_key?(self)
       @@subclass_data.store(self, Hash.new)
     end
 
     @@subclass_data.fetch(self)
   end
 
+  #
   # Retrieve a particular subclass variable for this class by it's name.
+  #
   def self.get_subclass_variable(name) #:nodoc:
     if subclass_data.has_key? name
       subclass_data.fetch name
     end
   end
 
+  #
   # Set a subclass variable of 'name' to 'value'
+  #
   def self.set_subclass_variable(name,value) #:nodoc:
     subclass_data.store name, value
   end
 
+  #
   # Setup subclass class variables. This initializes the
   # record width, pack format, and fields array
+  #
   def self.inherited(s) #:nodoc:
     s.set_subclass_variable('width',0)
     s.set_subclass_variable('pack_format',"")
