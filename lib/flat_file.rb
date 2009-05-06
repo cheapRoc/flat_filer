@@ -10,7 +10,7 @@
 #  Walt      Whitman   18190531
 #  Linus     Torvalds  19691228
 #
-#  class Poeple < FlatFile
+#  class People < FlatFile
 #    add_field :first_name, :width => 10, :filter => :trim
 #    add_field :last_name,  :width => 10, :filter => :trim
 #    add_field :birthday,   :width => 8,  :filter => lambda { |v| Date.parse(v) }
@@ -28,8 +28,6 @@
 #
 #    puts person.to_s
 #  end
-#
-#
 #
 # An alternative method for adding fields is to pass a block to the
 # add_field method.  The name is optional, but needs to be set either
@@ -104,7 +102,7 @@
 # how the records parsed and assembeled.
 
 require 'pathname'
-$:.unshift Pathname(__FILE__).dirname.join('flat_file')
+$:.unshift Pathname(__FILE__).dirname.join('flat_file').to_s
 
 require 'field_def'
 require 'record'
