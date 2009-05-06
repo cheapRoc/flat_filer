@@ -255,11 +255,11 @@ class FlatFile
   end
 
   def self.non_pad_fields
-    self.fields.delete_if { |f| f.is_padding? }
+    self.fields.reject { |f| f.is_padding? }
   end
 
   def non_pad_fields
-    self.non_pad_fields
+    self.class.non_pad_fields
   end
 
   def self.fields
@@ -282,7 +282,7 @@ class FlatFile
   # Returns the pack format which is generated from add_field
   # calls.  This format is used to unpack each line and create Records.
   def pack_format
-    self.class.get_pack_format
+    self.class.pack_format
   end
 
   def self.pack_format
