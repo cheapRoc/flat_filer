@@ -121,6 +121,114 @@ class FlatFile
   # Used to generate unique names for pad fields which use :auto_name.
   @@unique_id = 0
 
+  # Add a field to the FlatFile subclass.  Options can include
+  #
+  # :width - number of characters in field (default 10)
+  # :filter - callack, lambda or code block for processing during reading
+  # :formatter - callback, lambda, or code block for processing during writing
+  #
+  #  class SomeFile < FlatFile
+  #    add_field :some_field_name, :width => 35
+  #  end
+  #
+  def self.add_field(name=nil, options={}, &block)
+    options[:width] ||= 10;
+
+    fields << field_def = FieldDef.new(name, options, self)
+
+    yield field_def if block_given?
+
+    pack_format << "A#{field_def.width}"
+    increment_subclass_width(field_def.width)
+
+    return field_def
+  end
+
+  # Add a pad field. To have the name auto generated, use :auto_name for
+  # the name parameter.  For options see add_field.
+  def self.pad(name, options = {})
+    name = new_pad_name if name == :auto_name
+    fd   = add_field(name, options.merge(:padding => true))
+    return fd
+  end
+
+  def self.layout(name=nil)
+
+    
+  end
+
+  def self.new_pad_name #:nodoc:
+    "pad_#{ @@unique_id+=1 }".to_sym
+  end
+
+  # Create a new empty record object conforming to this file.
+  #
+  #
+  def self.new_record(model = nil, &block)
+    fields = get_subclass_variable 'fields'
+
+    record = Record.new(self)
+
+    fields.map do |f|
+      value = model.respond_to?(f.name.to_sym) ? model.send(f.name.to_sym) : ""
+      record.send("#{f.name}=", value)
+    end
+
+    yield block, record if block_given?
+
+    return record
+  end
+
+  def self.fields
+    get_subclass_variable 'fields'
+  end
+
+  def self.has_field?(field_name)
+    fields.select { |f| f.name == field_name.to_sym }.size > 0
+  end
+
+  def self.non_pad_fields
+    fields.reject { |f| f.is_padding? }
+  end
+
+  def self.width
+    get_subclass_variable 'width'
+  end
+
+  def self.pack_format
+    get_subclass_variable 'pack_format'
+  end
+
+  # create a record from line. The line is one line (or record) read from the
+  # text file.  The resulting record is an object which.  The object takes signals
+  # for each field according to the various fields defined with add_field or
+  # varients of it.
+  #
+  # line_number is an optional line number of the line in a file of records.
+  # If line is not in a series of records (lines), omit and it'll be -1 in the
+  # resulting record objects.  Just make sure you realize this when reporting
+  # errors.
+  #
+  # Both a getter (field_name), and setter (field_name=) are available to the
+  # user.
+  def create_record(line, line_number = -1) #:nodoc:
+    h = Hash.new
+
+    pack_format = self.class.get_subclass_variable 'pack_format'
+    fields      = self.class.get_subclass_variable 'fields'
+
+    f = line.unpack(pack_format)
+    
+    (0..(fields.size-1)).map do |index|
+      unless fields[index].is_padding?
+        h.store fields[index].name, fields[index].pass_through_filters(f[index])
+      end
+    end
+    
+    return Record.new(self.class, h, line_number)
+  end
+
+  # Iterates to the next record
   def next_record(io,&block)
     return if io.eof?
     required_line_length = self.class.get_subclass_variable 'width'
@@ -161,117 +269,13 @@ class FlatFile
     end
   end
 
-  # create a record from line. The line is one line (or record) read from the
-  # text file.  The resulting record is an object which.  The object takes signals
-  # for each field according to the various fields defined with add_field or
-  # varients of it.
-  #
-  # line_number is an optional line number of the line in a file of records.
-  # If line is not in a series of records (lines), omit and it'll be -1 in the
-  # resulting record objects.  Just make sure you realize this when reporting
-  # errors.
-  #
-  # Both a getter (field_name), and setter (field_name=) are available to the
-  # user.
-  def create_record(line, line_number = -1) #:nodoc:
-    h = Hash.new
-
-    pack_format = self.class.get_subclass_variable 'pack_format'
-    fields      = self.class.get_subclass_variable 'fields'
-
-    f = line.unpack(pack_format)
-    
-    (0..(fields.size-1)).map do |index|
-      unless fields[index].is_padding?
-        h.store fields[index].name, fields[index].pass_through_filters(f[index])
-      end
-    end
-    
-    return Record.new(self.class, h, line_number)
-  end
-
-  # Add a field to the FlatFile subclass.  Options can include
-  #
-  # :width - number of characters in field (default 10)
-  # :filter - callack, lambda or code block for processing during reading
-  # :formatter - callback, lambda, or code block for processing during writing
-  #
-  #  class SomeFile < FlatFile
-  #    add_field :some_field_name, :width => 35
-  #  end
-  #
-  def self.add_field(name=nil, options={},&block)
-    options[:width] ||= 10;
-
-    fields      = get_subclass_variable 'fields'
-    width       = get_subclass_variable 'width'
-    pack_format = get_subclass_variable 'pack_format'
-
-    fields << fd = FieldDef.new(name, options, self)
-
-    yield fd if block_given?
-
-    width += fd.width
-    pack_format << "A#{fd.width}"
-    set_subclass_variable 'width', width
-
-    return fd
-  end
-
-  # Add a pad field.  To have the name auto generated, use :auto_name for
-  # the name parameter.  For options see add_field.
-  def self.pad(name, options = {})
-    name = self.new_pad_name if name == :auto_name
-    fd   = self.add_field(name, options.merge(:padding => true))
-    return fd
-  end
-
-  def self.new_pad_name #:nodoc:
-    "pad_#{ @@unique_id+=1 }".to_sym
-  end
-
-
-  # Create a new empty record object conforming to this file.
-  #
-  #
-  def self.new_record(model = nil, &block)
-    fields = get_subclass_variable 'fields'
-
-    record = Record.new(self)
-
-    fields.map do |f|
-      value = model.respond_to?(f.name.to_sym) ? model.send(f.name.to_sym) : ""
-      record.send("#{f.name}=", value)
-    end
-
-    yield block, record if block_given?
-
-    return record
-  end
-
   # Return a lsit of fields for the FlatFile subclass
   def fields
     self.class.fields
   end
 
-  def self.non_pad_fields
-    self.fields.reject { |f| f.is_padding? }
-  end
-
   def non_pad_fields
     self.class.non_pad_fields
-  end
-
-  def self.fields
-    self.get_subclass_variable 'fields'
-  end
-
-  def self.has_field?(field_name)
-    self.fields.select { |f| f.name == field_name.to_sym }.size > 0
-  end
-
-  def self.width
-    get_subclass_variable 'width'
   end
 
   # Return the record length for the FlatFile subclass
@@ -285,46 +289,44 @@ class FlatFile
     self.class.pack_format
   end
 
-  def self.pack_format
-    get_subclass_variable 'pack_format'
-  end
-
   protected
+
+  #
+  # Setup subclass class variables. This initializes the
+  # record width, pack format, and fields array
+  #
+  def self.inherited(base) #:nodoc:
+    base.subclass_data.merge!('width' => 0, 'pack_format' => '', 'fields' => [])
+  end
 
   #
   # Retrieve the subclass data hash for the current class
   #
   def self.subclass_data #:nodoc:
-    unless @@subclass_data.has_key?(self)
-      @@subclass_data.store(self, Hash.new)
-    end
-
-    @@subclass_data.fetch(self)
+    @@subclass_data[self] ?
+      @@subclass_data[self] : @@subclass_data[self] = {}
   end
 
   #
   # Retrieve a particular subclass variable for this class by it's name.
   #
   def self.get_subclass_variable(name) #:nodoc:
-    if subclass_data.has_key? name
-      subclass_data.fetch name
-    end
+    subclass_data[name]
   end
 
   #
   # Set a subclass variable of 'name' to 'value'
   #
   def self.set_subclass_variable(name,value) #:nodoc:
-    subclass_data.store name, value
+    subclass_data[name] = value
   end
 
   #
-  # Setup subclass class variables. This initializes the
-  # record width, pack format, and fields array
+  # Increments the subclass data value for width, given a new width to
+  # sum with the old width
   #
-  def self.inherited(s) #:nodoc:
-    s.set_subclass_variable('width',0)
-    s.set_subclass_variable('pack_format',"")
-    s.set_subclass_variable('fields',Array.new)
+  def self.increment_subclass_width(width)
+    set_subclass_variable('width', get_subclass_variable('width') + width)
   end
+
 end

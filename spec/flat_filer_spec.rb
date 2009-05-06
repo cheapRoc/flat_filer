@@ -35,56 +35,56 @@ EOF
 
 end
 
-# class PersonAddressFile < FlatFile
+class PersonAddressFile < FlatFile
 
-#   EXAMPLE_FILE = <<-EOF
-# 1234567890123456789012345678901234567890
-# People Recs CHEM-101   010109        xxx
-# 1234567890123456789012345678901234567890
-# f_name    l_name              age pad---
-# Captain   Stubing             4      xxx
-# No        Phone               5      xxx
-# Has       Phone     11111111116      xxx
+  EXAMPLE_FILE = <<-EOF
+1234567890123456789012345678901234567890
+People Recs CHEM-101   010109        xxx
+1234567890123456789012345678901234567890
+f_name    l_name              age pad---
+Captain   Stubing             4      xxx
+No        Phone               5      xxx
+Has       Phone     11111111116      xxx
 
-# EOF
+EOF
   
-#   layout :header do
+  layout :header do
 
-#     add_field :title, :width => 12
+    add_field :title, :width => 12
 
-#     add_field :department, :width => 10
+    add_field :department, :width => 10
 
-#     add_field :created_at, :width => 6
+    add_field :created_at, :width => 6
 
-#     pad :auto_name, :width => 5
+    pad :auto_name, :width => 5
 
-#     add_field :ignore, :width => 5, :padding => true
+    add_field :ignore, :width => 5, :padding => true
 
-#   end
+  end
 
-#   layout :person do
+  layout :person do
 
-#     add_field :f_name, :width => 10
+    add_field :f_name, :width => 10
 
-#     add_field :l_name, :width => 10, :aggressive => true
+    add_field :l_name, :width => 10, :aggressive => true
 
-#     add_field :phone, :width => 10,
-#       :map_in_proc => proc { |model, record|
-#         return if model.phone
-#         model.phone = record.phone
-#       }
+    add_field :phone, :width => 10,
+      :map_in_proc => proc { |model, record|
+        return if model.phone
+        model.phone = record.phone
+      }
 
-#     add_field :age, :width => 4,
-#       :filter => proc { |v| v.to_i },
-#       :formatter => proc { |v| v.to_f.to_s }
+    add_field :age, :width => 4,
+      :filter => proc { |v| v.to_i },
+      :formatter => proc { |v| v.to_f.to_s }
 
-#     pad :auto_name, :width => 3
+    pad :auto_name, :width => 3
 
-#     add_field :ignore, :width => 3, :padding => true
+    add_field :ignore, :width => 3, :padding => true
 
-#   end
+  end
 
-# end
+end
 
 describe FlatFile do
   
