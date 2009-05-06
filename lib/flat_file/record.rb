@@ -1,4 +1,4 @@
-class FlatFile
+class FlatFile #:nodoc:
   # A record abstracts on line or 'record' of a fixed width field.
   # The methods available are the keys of the hash passed to the constructor.
   # For example the call:

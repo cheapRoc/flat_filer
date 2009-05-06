@@ -102,10 +102,11 @@
 # how the records parsed and assembeled.
 
 require 'pathname'
-$:.unshift Pathname(__FILE__).dirname.join('flat_file').to_s
+$:.unshift Pathname(__FILE__).dirname.to_s
 
-require 'field_def'
-require 'record'
+require 'flat_file/field_def'
+require 'flat_file/record'
+require 'flat_file/layout'
 
 class FlatFile
 
@@ -117,9 +118,7 @@ class FlatFile
   # A hash of data stored on behalf of subclasses. One hash
   # key for each subclass.
   @@subclass_data = Hash.new(nil)
-
-  # Used to generate unique names for pad fields which use :auto_name.
-  @@unique_id = 0
+  @@unique_id     = 0
 
   # Add a field to the FlatFile subclass.  Options can include
   #
@@ -147,16 +146,16 @@ class FlatFile
   # Add a pad field. To have the name auto generated, use :auto_name for
   # the name parameter.  For options see add_field.
   def self.pad(name, options = {})
-    name = new_pad_name if name == :auto_name
-    fd   = add_field(name, options.merge(:padding => true))
-    return fd
+    add_field(name == :auto_name ? new_pad_name : name,
+              options.merge(:padding => true))
   end
 
-  def self.layout(name=nil)
-
-    
+  def self.layout(name, options={}, &block)
+    layouts << layout = Layout.new(name.to_sym, options, self, block)
+    return layout
   end
 
+  # Used to generate unique names for pad fields which use :auto_name.
   def self.new_pad_name #:nodoc:
     "pad_#{ @@unique_id+=1 }".to_sym
   end
@@ -183,12 +182,8 @@ class FlatFile
     get_subclass_variable 'fields'
   end
 
-  def self.has_field?(field_name)
-    fields.select { |f| f.name == field_name.to_sym }.size > 0
-  end
-
-  def self.non_pad_fields
-    fields.reject { |f| f.is_padding? }
+  def self.layouts
+    get_subclass_variable 'layouts'
   end
 
   def self.width
@@ -197,6 +192,14 @@ class FlatFile
 
   def self.pack_format
     get_subclass_variable 'pack_format'
+  end
+
+  def self.has_field?(field_name)
+    fields.select { |f| f.name == field_name.to_sym }.size > 0
+  end
+
+  def self.non_pad_fields
+    fields.reject { |f| f.is_padding? }
   end
 
   # create a record from line. The line is one line (or record) read from the
@@ -255,7 +258,7 @@ class FlatFile
   #    puts r.first_name
   #  end
   #
-  def each_record(io,&block)
+  def each_record(io, &block)
     io.each_line do |line|
       required_line_length = self.class.get_subclass_variable 'width'
       #line = io.readline
@@ -295,16 +298,28 @@ class FlatFile
   # Setup subclass class variables. This initializes the
   # record width, pack format, and fields array
   #
-  def self.inherited(base) #:nodoc:
-    base.subclass_data.merge!('width' => 0, 'pack_format' => '', 'fields' => [])
-  end
+  # def self.inherited(base) #:nodoc:
+  #   base.subclass_data.merge!({ 
+  #    'width' => 0,
+  #    'pack_format' => '',
+  #    'fields' => [],
+  #    'layouts' => []
+  #   })
+  # end
 
   #
   # Retrieve the subclass data hash for the current class
   #
   def self.subclass_data #:nodoc:
-    @@subclass_data[self] ?
-      @@subclass_data[self] : @@subclass_data[self] = {}
+    @subclass_data ||= {
+      'width' => 0,
+      'pack_format' => '',
+      'fields' => [],
+      'layouts' => []
+    }
+
+    # @@subclass_data[self] ?
+    #   @@subclass_data[self] : @@subclass_data[self] = {}
   end
 
   #
@@ -326,7 +341,7 @@ class FlatFile
   # sum with the old width
   #
   def self.increment_subclass_width(width)
-    set_subclass_variable('width', get_subclass_variable('width') + width)
+    subclass_data['width'] = get_subclass_variable('width') + width
   end
 
 end

@@ -1,4 +1,4 @@
-class FlatFile
+class FlatFile #:nodoc:
   # A field definition tracks information that's necessary for
   # FlatFile to process a particular field.  This is typically
   # added to a subclass of FlatFile like so:

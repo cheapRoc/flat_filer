@@ -48,7 +48,7 @@ Has       Phone     11111111116      xxx
 
 EOF
   
-  layout :header do
+  layout :header, :rows => 1 do
 
     add_field :title, :width => 12
 
@@ -301,6 +301,10 @@ describe FlatFile do
   context 'multiple layouts' do
 
     before :all do
+      @default_layout = FlatClass.layout :some_layout do
+        add_field :bacon_bits
+      end
+      
       @person_address_file = PersonAddressFile.new
       @data                = PersonAddressFile::EXAMPLE_FILE
       @lines               = @data.split("\n")
@@ -309,9 +313,30 @@ describe FlatFile do
       Struct.new "Person", :f_name, :l_name, :phone, :age, :ignore
     end
 
-    it "should return a FlatFile::Layout"
-    it "should have a list of layouts"
+    it "should return a FlatFile::Layout" do
+      @default_layout.should be_an_instance_of(FlatFile::Layout)
+    end
     
+    it "should add to the list of layouts" do
+      @default_layout.parent.layouts.should include(@default_layout)
+    end
+
+    it "should have the supplied name" do
+      @default_layout.name.should == :some_layout
+    end
+
+    it "should have defined an anonymous field class" do
+      @default_layout.field_class.should be_an_instance_of(Class)
+    end
+
+    it "should have a field class which inherited FlatFile" do
+      @default_layout.field_class.ancestors.should include(FlatFile)
+    end
+
+    it "should have a field class with 1 fields" do
+      @default_layout.field_class.fields.size.should == 1
+    end
+
   end
 
   context "multiple lines" do 
