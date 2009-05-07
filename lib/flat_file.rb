@@ -115,11 +115,7 @@ class FlatFile
   class LongRecordError   < FlatFileException; end
   class RecordLengthError < FlatFileException; end
 
-  # A hash of data stored on behalf of subclasses. One hash
-  # key for each subclass.
-  @@subclass_data = Hash.new(nil)
-  @@unique_id     = 0
-
+  #
   # Add a field to the FlatFile subclass.  Options can include
   #
   # :width - number of characters in field (default 10)
@@ -143,11 +139,13 @@ class FlatFile
     return field_def
   end
 
+  #
   # Add a pad field. To have the name auto generated, use :auto_name for
   # the name parameter.  For options see add_field.
+  #
   def self.pad(name, options = {})
-    add_field(name == :auto_name ? new_pad_name : name,
-              options.merge(:padding => true))
+    add_field name == :auto_name ? new_pad_name : name,
+              options.merge(:padding => true)
   end
 
   def self.layout(name, options={}, &block)
@@ -155,18 +153,22 @@ class FlatFile
     return layout
   end
 
+  #
   # Used to generate unique names for pad fields which use :auto_name.
+  #
   def self.new_pad_name #:nodoc:
-    "pad_#{ @@unique_id+=1 }".to_sym
+    "pad_#{unique_id}".to_sym
   end
 
+  def self.unique_id
+    @unique_id = (@unique_id || 0) + 1
+  end
+  
+  #
   # Create a new empty record object conforming to this file.
   #
-  #
-  def self.new_record(model = nil, &block)
-    fields = get_subclass_variable 'fields'
-
-    record = Record.new(self)
+  def self.new_record(model=nil, &block)
+    record = Record.new self
 
     fields.map do |f|
       value = model.respond_to?(f.name.to_sym) ? model.send(f.name.to_sym) : ""
@@ -179,23 +181,23 @@ class FlatFile
   end
 
   def self.fields
-    get_subclass_variable 'fields'
+    subclass_data[:fields]
   end
 
   def self.layouts
-    get_subclass_variable 'layouts'
+    subclass_data[:layouts]
   end
 
   def self.width
-    get_subclass_variable 'width'
+    subclass_data[:width]
   end
 
   def self.pack_format
-    get_subclass_variable 'pack_format'
+    subclass_data[:pack_format]
   end
 
-  def self.has_field?(field_name)
-    fields.select { |f| f.name == field_name.to_sym }.size > 0
+  def self.has_field?(name='')
+    fields.any? { |f| f.name == name.to_sym }
   end
 
   def self.non_pad_fields
@@ -215,38 +217,33 @@ class FlatFile
   # Both a getter (field_name), and setter (field_name=) are available to the
   # user.
   def create_record(line, line_number = -1) #:nodoc:
-    h = Hash.new
-
-    pack_format = self.class.get_subclass_variable 'pack_format'
-    fields      = self.class.get_subclass_variable 'fields'
-
-    f = line.unpack(pack_format)
+    map    = Hash.new
+    values = line.unpack(pack_format)
     
     (0..(fields.size-1)).map do |index|
       unless fields[index].is_padding?
-        h.store fields[index].name, fields[index].pass_through_filters(f[index])
+        map[fields[index].name] = fields[index].pass_through_filters(values[index])
       end
     end
     
-    return Record.new(self.class, h, line_number)
+    Record.new(self.class, map, line_number)
   end
 
   # Iterates to the next record
-  def next_record(io,&block)
+  def next_record(io, &block)
     return if io.eof?
-    required_line_length = self.class.get_subclass_variable 'width'
     line = io.readline
     line.chop!
     return if line.length.zero?
 
-    unless (required_line_length - line.length) == 0
-      raise RecordLengthError.new("length is #{line.length} but should be #{required_line_length}")
+    unless (self.width - line.length).zero?
+      raise RecordLengthError, "length is #{line.length} but should be #{self.width}"
     end
 
     if block_given?
       yield create_record(line, io.lineno), line
     else
-      create_record(line,io.lineno)
+      create_record(line, io.lineno)
     end
   end
 
@@ -260,15 +257,14 @@ class FlatFile
   #
   def each_record(io, &block)
     io.each_line do |line|
-      required_line_length = self.class.get_subclass_variable 'width'
-      #line = io.readline
       line.chop!
-      next if line.length == 0
-      difference = required_line_length - line.length
-      raise RecordLengthError.new(
-                                  "length is #{line.length} but should be #{required_line_length}"
-                                  ) unless(difference == 0)
-      yield(create_record(line, io.lineno), line)
+      next if line.length.zero?
+
+      unless (self.width - line.length).zero?
+        raise RecordLengthError, "length is #{line.length} but should be #{self.width}"
+      end
+
+      yield create_record(line, io.lineno), line
     end
   end
 
@@ -312,10 +308,10 @@ class FlatFile
   #
   def self.subclass_data #:nodoc:
     @subclass_data ||= {
-      'width' => 0,
-      'pack_format' => '',
-      'fields' => [],
-      'layouts' => []
+      :width       => 0,
+      :pack_format => '',
+      :fields      => [],
+      :layouts     => []
     }
 
     # @@subclass_data[self] ?
@@ -341,7 +337,7 @@ class FlatFile
   # sum with the old width
   #
   def self.increment_subclass_width(width)
-    subclass_data['width'] = get_subclass_variable('width') + width
+    subclass_data[:width] = get_subclass_variable(:width) + width
   end
 
 end

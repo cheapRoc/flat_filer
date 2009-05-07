@@ -107,15 +107,15 @@ describe FlatFile do
     end
 
     it "should store the fields within the subclass data" do
-      FlatClass.subclass_data.should have_key('fields')
+      FlatClass.subclass_data.should have_key(:fields)
     end
 
     it "should store the pack format within the subclass data" do
-      FlatClass.subclass_data.should have_key('pack_format')
+      FlatClass.subclass_data.should have_key(:pack_format)
     end
 
     it "should store the width within the subclass data" do
-      FlatClass.subclass_data.should have_key('width')
+      FlatClass.subclass_data.should have_key(:width)
     end
 
     it "should add field :some_field" do
@@ -309,8 +309,8 @@ describe FlatFile do
       @data                = PersonAddressFile::EXAMPLE_FILE
       @lines               = @data.split("\n")
 
-      Struct.new "Address", :title, :department, :created_at, :auto_name, :ignore
-      Struct.new "Person", :f_name, :l_name, :phone, :age, :ignore
+      # Struct.new "Address", :title, :department, :created_at, :auto_name, :ignore
+      # Struct.new "Person", :f_name, :l_name, :phone, :age, :ignore
     end
 
     it "should return a FlatFile::Layout" do

@@ -18,20 +18,11 @@ class FlatFile #:nodoc:
 
     # Create a new Record from a hash of fields
     def initialize(klass, fields=Hash.new, line_number=-1, &block)
-      @fields = Hash.new
-      @klass = klass
-      @line_number = line_number
+      @fields, @klass, @line_number = fields, klass, line_number
 
-      klass_fields = klass.get_subclass_variable('fields')
-
-      klass_fields.each do |f|
-        @fields.store(f.name, "")
-      end
-
-      @fields.merge!(fields)
-
-      @fields.each_key do |k|
-        @fields.delete(k) unless klass.has_field?(k)
+      @fields = klass.fields.inject({}) do |map, field|
+        klass.has_field?(field.name) ?
+          map.update(field.name => fields[field.name]) : map
       end
 
       yield block, self if block_given?
@@ -41,58 +32,54 @@ class FlatFile #:nodoc:
 
     def map_in(model)
       @klass.non_pad_fields.each do |f|
-        next unless(model.respond_to? "#{f.name}=")
+        next unless model.respond_to?("#{f.name}=")
         if f.map_in_proc
-          f.map_in_proc.call(model,self)
+          f.map_in_proc.call(model, self)
         else
-          model.send("#{f.name}=", send(f.name)) if f.aggressive or model.send(f.name).nil? || model.send(f.name).empty?
+          if f.aggressive || model.send(f.name).nil? || model.send(f.name).empty?
+            model.send("#{f.name}=", send(f.name))
+          end
         end
       end
     end
 
+    #
     # Catches method calls and returns field values or raises an Error.
-    def method_missing(method,params=nil)
-      if(method.to_s.match(/^(.*)=$/))
-        if(fields.has_key?($1.to_sym))
-          @fields.store($1.to_sym,params)
+    #
+    def method_missing(method, params=nil)
+      if method.to_s =~ /^(.*)=$/
+        if fields.has_key?($1.to_sym)
+          @fields.store($1.to_sym, params)
         else
-          raise Exception.new("Unknown method: #{ method }")
+          raise StandardError, "Unknown method: #{method}"
         end
       else
-        if(fields.has_key? method)
+        if fields.has_key?(method)
           @fields.fetch(method)
         else
-          raise Exception.new("Unknown method: #{ method }")
+          raise StandardError, "Unknown method: #{method}"
         end
       end
     end
 
+    #
     # Returns a string representation of the record suitable for writing to a flat
-    # file on disk or other media.  The fields are parepared according to the file
+    # file on disk or other media.  The fields are prepared according to the file
     # definition, and any formatters attached to the field definitions.
+    #
     def to_s
-      klass.fields.map { |field_def|
+      klass.fields.map do |field_def|
         field_name = field_def.name.to_s
-        v = @fields[ field_name.to_sym ]#.to_s
-
-        field_def.pass_through_formatters(
-                                          field_def.is_padding? ? "" : v
-                                          )
-      }.pack(klass.pack_format)
+        value = @fields[field_name.to_sym]
+        field_def.pass_through_formatters(field_def.is_padding? ? "" : value)
+      end.pack(klass.pack_format)
     end
 
     # Produces a multiline string, one field per line suitable for debugging purposes.
     def debug_string
-      str = ""
-      klass.fields.each do |f|
-        if f.is_padding?
-          str << "#{f.name}: \n"
-        else
-          str << "#{f.name}: #{send(f.name.to_sym)}\n"
-        end
+      klass.fields.inject('') do |str, field|
+        str << "#{f.name}: #{send(f.name.to_sym) if f.is_padding?}\n"
       end
-
-      str
     end
 
   end
