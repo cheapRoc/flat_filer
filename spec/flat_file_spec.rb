@@ -63,7 +63,7 @@ describe FlatFile do
     
   end
 
-  context 'inherited class instance' do
+  context 'inherited class instance with basic fields' do
 
     before :all do
       @person_file = PersonFile.new      

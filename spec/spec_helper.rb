@@ -2,6 +2,8 @@ require 'pathname'
 require Pathname(__FILE__).dirname.parent.join('lib', 'flat_file')
 require 'spec'
 
+alias running lambda
+
 class FlatClass < FlatFile; end
 
 class PersonFile < FlatFile
@@ -35,7 +37,7 @@ EOF
 
 end
 
-class PersonAddressFile < FlatFile
+class DepartmentFile < FlatFile
 
   EXAMPLE_FILE = <<-EOF
 1234567890123456789012345678901234567890
@@ -48,7 +50,7 @@ Has       Phone     11111111116      xxx
 
 EOF
   
-  layout :header, :rows => 1 do
+  layout :header do
 
     add_field :title, :width => 12
 

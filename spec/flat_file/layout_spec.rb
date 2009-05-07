@@ -3,6 +3,23 @@ require Pathname(__FILE__).dirname.parent.join('spec_helper')
 
 describe FlatFile::Layout do
 
+  context 'being instantiated' do
+
+    it "should raise ConstructorError if not passed a parent" do
+      running { 
+        FlatFile::Layout.new :bacon_bits, nil, nil do
+        end
+      }.should raise_error(FlatFile::Layout::ConstructorError)
+    end
+
+    it "should raise ConstructorError if not passed a field_proc" do
+      running {
+        FlatFile::Layout.new :bacon_bits, nil, self, nil
+      }.should raise_error(FlatFile::Layout::ConstructorError)
+    end
+
+  end
+  
   context 'being added' do
 
     before :all do
