@@ -6,8 +6,8 @@ describe FlatFile::FieldDef do
   context 'being added' do
 
     before :all do
-      FieldClass     = Class.new FlatFile
-      @default_field = FieldClass.add_field :some_field
+      FieldDefClass     = Class.new FlatFile
+      @default_field = FieldDefClass.add_field :some_field
     end
     
     it "should return a new instance" do
@@ -31,7 +31,7 @@ describe FlatFile::FieldDef do
     end
 
     it "should have the master class as the file_klass" do
-      @default_field.file_klass.should == FieldClass
+      @default_field.file_klass.should == FieldDefClass
     end
 
     it "should not be aggressive" do
@@ -43,17 +43,17 @@ describe FlatFile::FieldDef do
     end
 
     it "should be added to the parent classes fields" do
-      FieldClass.fields.should include(@default_field)
+      FieldDefClass.fields.should include(@default_field)
     end
 
     it "should add 'A10' to the parent class pack format for each field" do
-      FieldClass.pack_format.should == "A10" * FieldClass.fields.size
+      FieldDefClass.pack_format.should == "A10" * FieldDefClass.fields.size
     end
 
     it "should add '10' to the parent class width" do
       lambda {
-        FieldClass.add_field(:field_3)
-      }.should change(FieldClass, :width).by(10)
+        FieldDefClass.add_field(:field_3)
+      }.should change(FieldDefClass, :width).by(10)
     end
 
   end

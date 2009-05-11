@@ -3,7 +3,7 @@ require Pathname(__FILE__).dirname.join('spec_helper')
 
 describe FlatFile do
   
-  context "inherited classes" do
+  context "inherited" do
 
     it "should have a list of fields" do
       FlatClass.fields.should be_an_instance_of(Array)
@@ -63,99 +63,137 @@ describe FlatFile do
     
   end
 
-  context 'inherited class instance with basic fields' do
+  describe 'instance' do
 
-    before :all do
-      @person_file = PersonFile.new      
-      @data        = PersonFile::EXAMPLE_FILE
-      @lines       = @data.split("\n")
+    context 'with basic fields' do
 
-      Struct.new "Person", :f_name, :l_name, :phone, :age, :ignore
-    end
+      before :all do
+        @person_file = PersonFile.new      
+        @data        = PersonFile::EXAMPLE_FILE
+        @lines       = @data.split("\n")
 
-    before :each do
-      @stream = StringIO.new(@data)
-    end
-    
-    it "should have fields like its parent class" do
-      @person_file.fields.should == PersonFile.fields
-    end
-
-    it "should list non padded fields like its parent class" do
-      @person_file.non_pad_fields.should == PersonFile.non_pad_fields
-    end
-    
-    it "should have a width like its parent class" do
-      @person_file.width.should == PersonFile.width
-    end
-    
-    it "should have a pack format like its parent class" do
-      @person_file.pack_format.should == PersonFile.pack_format
-    end
-    
-    it "should be able to create a record" do
-      @person_file.create_record("Captain   Stubing   4         ").
-        should be_an_instance_of(FlatFile::Record)
-    end
-
-    it "should iterate to the next record" do
-      first_record = @person_file.next_record(@stream)
-      @person_file.next_record(@stream).should_not == first_record
-    end
-
-    it "should iterate over each record" do
-      record_count = 0
-      @person_file.each_record(@stream) do
-        record_count += 1
+        Struct.new "Person", :f_name, :l_name, :phone, :age, :ignore
       end
-      record_count.should == @lines.length
-    end
-    
-    it "should reach end of file" do
-      @person_file.each_record(@stream) { |r,l| }
-      @stream.should be_eof
-    end
 
-    it "should honor filters when creating a record" do
-      r = @person_file.create_record("Captain   Stubing   4         ")
-      r.age.should be_an_instance_of(Fixnum)
-    end
-
-    it "should honor formatters when iterating each record" do
-      @person_file.next_record(@stream)
-      @person_file.next_record(@stream)
-      @person_file.next_record(@stream) do |r, line_number|
-        r.to_s.split(/\s+/)[2].should == '4.0'
+      before :each do
+        @stream = StringIO.new(@data)
       end
+      
+      it "should have fields like its parent class" do
+        @person_file.fields.should == PersonFile.fields
+      end
+
+      it "should list non padded fields like its parent class" do
+        @person_file.non_pad_fields.should == PersonFile.non_pad_fields
+      end
+      
+      it "should have a width like its parent class" do
+        @person_file.width.should == PersonFile.width
+      end
+      
+      it "should have a pack format like its parent class" do
+        @person_file.pack_format.should == PersonFile.pack_format
+      end
+      
+      it "should be able to create a record" do
+        @person_file.create_record("Captain   Stubing   4         ").
+          should be_an_instance_of(FlatFile::Record)
+      end
+
+      it "should iterate to the next record" do
+        first_record = @person_file.next_record(@stream)
+        @person_file.next_record(@stream).should_not == first_record
+      end
+
+      it "should iterate over each record" do
+        record_count = 0
+        @person_file.each_record(@stream) do
+          record_count += 1
+        end
+        record_count.should == @lines.length
+      end
+      
+      it "should reach end of file" do
+        @person_file.each_record(@stream) { |r,l| }
+        @stream.should be_eof
+      end
+
+      it "should honor filters when creating a record" do
+        r = @person_file.create_record("Captain   Stubing   4         ")
+        r.age.should be_an_instance_of(Fixnum)
+      end
+
+      it "should honor formatters when iterating each record" do
+        @person_file.next_record(@stream)
+        @person_file.next_record(@stream)
+        @person_file.next_record(@stream) do |r, line_number|
+          r.to_s.split(/\s+/)[2].should == '4.0'
+        end
+      end
+
+      # NOTE: these are really FlatFile::Record specs, since they primarily use #map_in
+      
+      it "should overwrite given an aggressive field" do
+        person = Struct::Person.new('A','Hole','5555555555','4')
+        rec = @person_file.create_record(@lines[4])
+        rec.map_in(person)
+        person.l_name.should == "Phone"
+      end
+
+      it "should overwrite given a map in proc for a field" do
+        person = Struct::Person.new('A','Hole','5555555555','4')
+        rec = @person_file.create_record(@lines[4])
+        rec.map_in(person)
+        person.ignore.should be_nil
+        person.f_name.should == "A"
+      end
+
+      it "should not overwrite without a map in proc for a field" do
+        person = Struct::Person.new('A','Hole','5555555555','4')
+        rec = @person_file.create_record(@lines[4])
+        rec.map_in(person)
+        person.phone.should == "5555555555"
+      end
+
     end
 
-    # NOTE: these are really FlatFile::Record specs, since they primarily use #map_in
+    context 'with multiple layouts' do
+
+      before :all do
+        @filer  = DepartmentFile.new
+        @stream = StringIO.new DepartmentFile::EXAMPLE_FILE
+      end
+      
+      it "should have layouts" do
+        @filer.should have_layouts
+      end
+
+      it "should have layout names" do
+        @filer.layout_names.should == @filer.layouts.map { |x| x.name.to_sym }
+      end
+
+      it "should have a layout map" do
+        layout_map = @filer.layouts.inject({}) do |map, layout|
+          map.update(layout.name.to_sym => layout)
+        end
+        
+        @filer.layout_map.should == layout_map
+      end
+
+      it "should add a layout method called 'headers'" do
+        @filer.headers.should == @filer.layouts[0].field_class
+      end
+
+      it "should add a layout method called 'people'" do
+        @filer.people.should == @filer.layouts[1].field_class
+      end
+      
+    end
     
-    it "should overwrite given an aggressive field" do
-      person = Struct::Person.new('A','Hole','5555555555','4')
-      rec = @person_file.create_record(@lines[4])
-      rec.map_in(person)
-      person.l_name.should == "Phone"
-    end
-
-    it "should overwrite given a map in proc for a field" do
-      person = Struct::Person.new('A','Hole','5555555555','4')
-      rec = @person_file.create_record(@lines[4])
-      rec.map_in(person)
-      person.ignore.should be_nil
-      person.f_name.should == "A"
-    end
-
-    it "should not overwrite without a map in proc for a field" do
-      person = Struct::Person.new('A','Hole','5555555555','4')
-      rec = @person_file.create_record(@lines[4])
-      rec.map_in(person)
-      person.phone.should == "5555555555"
-    end
+    # context "with multiple lines" do 
+    # end
 
   end
-
-  context "multiple lines" do 
-  end
+  
 
 end

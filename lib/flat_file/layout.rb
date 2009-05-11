@@ -3,11 +3,7 @@ class FlatFile #:nodoc:
   # within a single class.
   class Layout
 
-    class ConstructorError < StandardError
-      def to_s
-        'No parent and/or field_proc?'
-      end
-    end 
+    class ConstructorError < StandardError; end
 
     attr_reader \
       :name,
@@ -16,10 +12,24 @@ class FlatFile #:nodoc:
       :field_class
 
     def initialize(name, options={}, parent=nil, field_proc=nil)
-      raise ConstructorError unless parent && field_proc
+      if parent && field_proc
+        @name       = name
+        @parent     = parent
+        @rows       = options[:rows]
+        @field_proc = field_proc
+      else
+        raise ConstructorError, 'No parent and/or field_proc'
+      end
+    end
 
-      @name, @parent, @rows = name, parent, options[:rows]
-      @field_class = Class.new(FlatFile, &field_proc)
+    def field_class
+      @field_class ||= Class.new FlatFile, &field_proc
+    end
+
+    private
+
+    def field_proc
+      @field_proc
     end
     
   end
