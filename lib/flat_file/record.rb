@@ -16,8 +16,10 @@ class FlatFile #:nodoc:
       :klass,
       :line_number
 
+    #
     # Create a new Record from a hash of fields
-    def initialize(klass, fields=Hash.new, line_number=-1, &block)
+    #
+    def initialize klass, fields=Hash.new, line_number=-1, &block
       @fields, @klass, @line_number = fields, klass, line_number
 
       @fields = klass.fields.inject({}) do |map, field|
@@ -30,7 +32,7 @@ class FlatFile #:nodoc:
       return self
     end
 
-    def map_in(model)
+    def map_in model
       @klass.non_pad_fields.each do |f|
         next unless model.respond_to?("#{f.name}=")
         if f.map_in_proc
@@ -46,7 +48,7 @@ class FlatFile #:nodoc:
     #
     # Catches method calls and returns field values or raises an Error.
     #
-    def method_missing(method, params=nil)
+    def method_missing method, params=nil
       if method.to_s =~ /^(.*)=$/
         if fields.has_key?($1.to_sym)
           @fields.store($1.to_sym, params)

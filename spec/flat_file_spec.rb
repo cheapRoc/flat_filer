@@ -1,3 +1,4 @@
+require 'ostruct'
 require 'pathname'
 require Pathname(__FILE__).dirname.join('spec_helper')
 
@@ -72,7 +73,12 @@ describe FlatFile do
         @data        = PersonFile::EXAMPLE_FILE
         @lines       = @data.split("\n")
 
-        Struct.new "Person", :f_name, :l_name, :phone, :age, :ignore
+        @person = OpenStruct.new \
+          :f_name => 'A',
+          :l_name => 'Hole',
+          :phone => '5555555555',
+          :age => '4',
+          :ignore => nil
       end
 
       before :each do
@@ -134,25 +140,22 @@ describe FlatFile do
       # NOTE: these are really FlatFile::Record specs, since they primarily use #map_in
       
       it "should overwrite given an aggressive field" do
-        person = Struct::Person.new('A','Hole','5555555555','4')
         rec = @person_file.create_record(@lines[4])
-        rec.map_in(person)
-        person.l_name.should == "Phone"
+        rec.map_in(@person)
+        @person.l_name.should == "Phone"
       end
 
       it "should overwrite given a map in proc for a field" do
-        person = Struct::Person.new('A','Hole','5555555555','4')
         rec = @person_file.create_record(@lines[4])
-        rec.map_in(person)
-        person.ignore.should be_nil
-        person.f_name.should == "A"
+        rec.map_in(@person)
+        @person.ignore.should be_nil
+        @person.f_name.should == "A"
       end
 
       it "should not overwrite without a map in proc for a field" do
-        person = Struct::Person.new('A','Hole','5555555555','4')
         rec = @person_file.create_record(@lines[4])
-        rec.map_in(person)
-        person.phone.should == "5555555555"
+        rec.map_in(@person)
+        @person.phone.should == "5555555555"
       end
 
     end
@@ -161,7 +164,21 @@ describe FlatFile do
 
       before :all do
         @filer  = DepartmentFile.new
-        @stream = StringIO.new DepartmentFile::EXAMPLE_FILE
+        @data   = DepartmentFile::EXAMPLE_FILE
+        @stream = StringIO.new @data
+        @lines  = @data.split("\n")
+
+        @layout_map = @filer.layouts.inject({}) do |map, layout|
+          map.update(layout.name.to_sym => layout)
+        end
+
+        @header = OpenStruct.new \
+          :title => 'People Recs',
+          :department => 'CHEM-101',
+          :created_at => '010109'
+
+        @header_record = @filer.headers.create_record(@lines[1])
+        @person_record = @filer.people.create_record(@lines[4])
       end
       
       it "should have layouts" do
@@ -169,15 +186,11 @@ describe FlatFile do
       end
 
       it "should have layout names" do
-        @filer.layout_names.should == @filer.layouts.map { |x| x.name.to_sym }
+        @filer.layout_names.should == @layout_map.keys
       end
 
       it "should have a layout map" do
-        layout_map = @filer.layouts.inject({}) do |map, layout|
-          map.update(layout.name.to_sym => layout)
-        end
-        
-        @filer.layout_map.should == layout_map
+        @filer.layout_map.should == @layout_map
       end
 
       it "should add a layout method called 'headers'" do
@@ -187,10 +200,31 @@ describe FlatFile do
       it "should add a layout method called 'people'" do
         @filer.people.should == @filer.layouts[1].field_class
       end
+
+      it "should create a valid header record" do
+        @header_record.to_s.should == "People Recs CHEM-101   01010          "
+      end
+
+      it "should create a valid person record" do
+        @person_record.to_s.should == "Captain   Stubing             4.0       "
+      end
+
+      it "should have a f_name for the person record" do
+        @person_record.f_name.should == "Captain"
+      end
+
+      it "should have a department for the header record" do
+        @header_record.department.should == "CHEM-101"
+      end
       
     end
     
-    # context "with multiple lines" do 
+    # context "with multiple lines" do
+
+    #   before :all do
+        
+    #   end
+      
     # end
 
   end

@@ -130,7 +130,7 @@ class FlatFile
   #    add_field :some_field_name, :width => 35
   #  end
   #
-  def self.add_field(name=nil, options={}, &block)
+  def self.add_field name=nil, options={}, &block
     options[:width] ||= 10;
 
     fields << field_def = FieldDef.new(name, options, self)
@@ -147,7 +147,7 @@ class FlatFile
   # Add a pad field. To have the name auto generated, use :auto_name for
   # the name parameter.  For options see add_field.
   #
-  def self.pad(name, options = {})
+  def self.pad name, options = {}
     add_field name == :auto_name ? new_pad_name : name,
               options.merge(:padding => true)
   end
@@ -156,7 +156,7 @@ class FlatFile
   # Add a sub-record layout. This allows you to have multiple record types
   # and field arrangements per flat file.
   #
-  def self.layout(name, options={}, &block)
+  def self.layout name, options={}, &block
     layouts << layout = Layout.new(name.to_sym, options, self, block)
     return layout
   end
@@ -171,7 +171,7 @@ class FlatFile
   #
   # Create a new empty record object conforming to this file.
   #
-  def self.new_record(model=nil, &block)
+  def self.new_record model=nil, &block
     record = Record.new self
 
     fields.map do |f|
@@ -182,6 +182,13 @@ class FlatFile
     yield block, record if block_given?
 
     return record
+  end
+
+  #
+  # Provide the ability to create a record to our class 
+  #
+  def self.create_record line, line_number=-1
+    new.create_record line, line_number
   end
 
   def self.fields
@@ -220,7 +227,7 @@ class FlatFile
   #
   # Both a getter (field_name), and setter (field_name=) are available to the
   # user.
-  def create_record(line, line_number = -1) #:nodoc:
+  def create_record line, line_number=-1
     map    = Hash.new
     values = line.unpack(pack_format)
     
@@ -234,7 +241,7 @@ class FlatFile
   end
 
   # Iterates to the next record
-  def next_record(io, &block)
+  def next_record io, &block
     return if io.eof?
     line = io.readline
     line.chop!
@@ -259,7 +266,7 @@ class FlatFile
   #    puts r.first_name
   #  end
   #
-  def each_record(io, &block)
+  def each_record io, &block
     io.each_line do |line|
       line.chop!
       next if line.length.zero?
@@ -315,10 +322,16 @@ class FlatFile
     !layouts.empty?
   end
 
+  #
+  # Names of our layouts
+  #
   def layout_names
-    layouts.map { |layout| layout.name.to_sym }
+    layout_map.keys
   end
 
+  #
+  # Map of symbolized layout names to their FlatFile::Layout instances
+  #
   def layout_map
     layouts.inject({}) do |map, layout|
       map.update(layout.name.to_sym => layout)
@@ -328,13 +341,13 @@ class FlatFile
   #
   # Provides handling of layout named methods
   #
-  def method_missing(name, *args)
+  def method_missing name, *args
     singular_name = singularize(name.to_s).to_sym
-    
+
     if layout_names.include?(singular_name)
       layout_map[singular_name].field_class
     else
-      super(name, *args)
+      super name, *args
     end
   end
   
@@ -356,14 +369,14 @@ class FlatFile
   #
   # Retrieve a particular subclass variable for this class by it's name.
   #
-  def self.get_subclass_variable(name) #:nodoc:
+  def self.get_subclass_variable name
     subclass_data[name]
   end
 
   #
   # Set a subclass variable of 'name' to 'value'
   #
-  def self.set_subclass_variable(name,value) #:nodoc:
+  def self.set_subclass_variable name, value
     subclass_data[name] = value
   end
 
@@ -371,7 +384,7 @@ class FlatFile
   # Increments the subclass data value for width, given a new width to
   # sum with the old width
   #
-  def self.increment_subclass_width(width)
+  def self.increment_subclass_width width
     subclass_data[:width] = get_subclass_variable(:width) + width
   end
 
@@ -382,11 +395,11 @@ class FlatFile
     @unique_id = (@unique_id || 0) + 1
   end
 
-  def pluralize(word)
+  def pluralize word
     Inflection.pluralize word
   end
 
-  def singularize(word)
+  def singularize word
     Inflection.singularize word
   end
 

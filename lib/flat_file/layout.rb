@@ -11,7 +11,7 @@ class FlatFile #:nodoc:
       :parent,
       :field_class
 
-    def initialize(name, options={}, parent=nil, field_proc=nil)
+    def initialize name, options={}, parent=nil, field_proc=nil
       if parent && field_proc
         @name       = name
         @parent     = parent
@@ -31,6 +31,6 @@ class FlatFile #:nodoc:
     def field_proc
       @field_proc
     end
-    
+   
   end
 end
