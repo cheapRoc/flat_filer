@@ -131,8 +131,6 @@ class FlatFile
   #  end
   #
   def self.add_field name=nil, options={}, &block
-    options[:width] ||= 10;
-
     fields << field_def = FieldDef.new(name, options, self)
 
     yield field_def if block_given?

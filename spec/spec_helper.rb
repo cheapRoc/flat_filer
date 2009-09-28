@@ -50,7 +50,7 @@ Has       Phone     11111111116      xxx
 
 EOF
   
-  layout :header do
+  layout :header, :rows => 1 do
 
     add_field :title, :width => 12
 
